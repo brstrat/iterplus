@@ -1,38 +1,46 @@
 # -*- coding: utf-8 -*-
-from itertools import tee
+from itertools import islice
 
-def sliceable(iterator):
-    class Slice(object):
+class sliceable(object):
 
-        def __init__(self, iter):
-            self._iter, self._root = tee(iter)
-            self._cache = []
+    def __init__(self, it):
+        self._iter = iter(it)
+        self._cache = []
 
-        def __getitem__(self, k):
-            if isinstance(k, slice):
-                return [self._get_value(i) for i in xrange(k.start, k.stop, k.step or 1)]
+    def __getitem__(self, k):
+        if isinstance(k, slice):
+            return list(islice(self, k.start, k.stop, k.step))
 
-            return self._get_value(k)
+        try:
+            return next(islice(self, k, k+1))
+        except StopIteration:
+            raise IndexError('index out of range')
 
-        def _get_value(self, k):
-            cache_len = len(self._cache)
+    def __iter__(self):
+        for entry in self._cache:
+            yield entry
 
-            if k < cache_len:
-                return self._cache[k]
+        for entry in self._iter:
+            self._cache.append(entry)
+            yield entry
 
-            self._root, root_copy = tee(self._root)
-            ret = None
+    def next(self):
+        return next(iter(self))
 
-            for i in xrange(k - cache_len + 1):
-                ret = root_copy.next()
-                self._cache.append(ret)
 
-            self._root = root_copy
+if __name__ == '__main__':
+    s = sliceable(xrange(4))
+    assert s[:] == [0, 1, 2, 3]
+    assert s[:1] == [0]
+    assert s[1:] == [1, 2, 3]
+    assert s[:10] == [0, 1, 2, 3]
+    assert s[0:1] == [0]
+    assert s[1] == 1
+    assert list(s) == [0, 1, 2, 3]
 
-            return ret
-
-        def next(self):
-            return self._iter.next()
-
-    return Slice(iterator)
-
+    try:
+        s[5]
+    except IndexError:
+        pass
+    else:
+        assert False
